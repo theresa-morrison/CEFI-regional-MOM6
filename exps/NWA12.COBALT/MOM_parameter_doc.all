@@ -524,7 +524,7 @@ USE_NW2_TRACERS = False         !   [Boolean] default = False
 
 ! === module register_MOM_generic_tracer ===
 GENERIC_TRACER_IC_FILE = "NWA12_COBALT_2023_10_spinup_2003.nc" ! default = ""
-                                ! The file in which the generic trcer initial values can be found, or an empty
+                                ! The file in which the generic tracer initial values can be found, or an empty
                                 ! string for internal initialization.
 GENERIC_TRACER_IC_FILE_IS_Z = False !   [Boolean] default = False
                                 ! If true, GENERIC_TRACER_IC_FILE is in depth space, not layer space.
@@ -1926,10 +1926,13 @@ ML_OMEGA_FRAC = 0.001           !   [nondim] default = 0.0
 EKMAN_SCALE_COEF = 1.0          !   [nondim] default = 1.0
                                 ! A nondimensional scaling factor controlling the inhibition of the diffusive
                                 ! length scale by rotation. Making this larger decreases the PBL diffusivity.
-EPBL_ANSWER_DATE = 99991231     ! default = 99991231
+EPBL_ANSWER_DATE = 20231231     ! default = 99991231
                                 ! The vintage of the order of arithmetic and expressions in the energetic PBL
                                 ! calculations.  Values below 20190101 recover the answers from the end of 2018,
                                 ! while higher values use updated and more robust forms of the same expressions.
+                                ! Values below 20240101 use A**(1./3.) to estimate the cube root of A in several
+                                ! expressions, while higher values use the integer root function cuberoot(A) and
+                                ! therefore can work with scaled variables.
 EPBL_ORIGINAL_PE_CALC = True    !   [Boolean] default = True
                                 ! If true, the ePBL code uses the original form of the potential energy change
                                 ! code.  Otherwise, the newer version that can work with successive increments

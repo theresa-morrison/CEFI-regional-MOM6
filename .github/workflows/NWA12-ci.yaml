@@ -48,7 +48,7 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        case: ["NWA12.CFC"]
+        case: ["NWA12.CFC", "NWA12.COBALT"]
     steps:
       - name: Run Experiment ${{ matrix.case }}
         run: |
@@ -69,7 +69,7 @@ jobs:
           done
           # 
           expected_string="All restart files are identical, PASS"
-          check_file="${{ env.TEST_DIR }}/NWA12_CHECK/exps/${{ matrix.case }}/NWA12.CFC_o.$jobid"
+          check_file="${{ env.TEST_DIR }}/NWA12_CHECK/exps/${{ matrix.case }}/${{ matrix.case }}_o.$jobid"
           if [ -f "$check_file" ]; then
              if grep -qF "$expected_string" $check_file; then
                  echo "PASSED: ${{ matrix.case }}"

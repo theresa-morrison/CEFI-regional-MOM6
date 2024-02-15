@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=13
-#SBATCH --time=30
+#SBATCH --time=60
 #SBATCH --job-name="NWA12.COBALT"
 #SBATCH --output=NWA12.COBALT_o.%j
 #SBATCH --error=NWA12.COBALT_e.%j
@@ -25,8 +25,8 @@ rm -rf RESTART*
 echo "Test started:  " `date`
 
 #
-echo "run 2hrs test ..."
-srun -n ${ntasks} ../../builds/build/gaea-ncrc5.intel23/ocean_ice/repro/MOM6SIS2 > out 2>err 
+echo "run 48hrs test ..."
+srun --ntasks ${ntasks} --cpus-per-task=1 --export=ALL ../../builds/build/gaea-ncrc5.intel23/ocean_ice/repro/MOM6SIS2 > out 2>err 
 
 
 #
