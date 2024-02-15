@@ -32,7 +32,7 @@ jobs:
     - name: Build MOM6SIS2
       run: |
         cd ${{ env.TEST_DIR }}/NWA12_CHECK/builds
-        jobid=$(sbatch --parsable sbatch --clusters=es --nodes=1 --ntasks=8 --account=cefi --partition=eslogin_c5 --qos=normal --export=NONE ./linux-build.bash -m gaea -p ncrc5.intel23 -t repro -f mom6sis2 | awk -F';' '{print $1}' | cut -f1)
+        jobid=$(sbatch --parsable --clusters=es --nodes=1 --ntasks=8 --account=cefi --partition=eslogin_c5 --qos=normal --export=NONE ./linux-build.bash -m gaea -p ncrc5.intel23 -t repro -f mom6sis2 | awk -F';' '{print $1}' | cut -f1)
         sleep 1
           while :; do
               job_status=$(squeue -h -j "$jobid" -o "%T" 2>/dev/null)
