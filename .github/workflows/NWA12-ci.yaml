@@ -35,7 +35,7 @@ jobs:
         ./linux-build.bash -m gaea -p ncrc5.intel23 -t repro -f mom6sis2
 
 
-  run-NWA12-restart-ci:
+  run-NWA12-ci:
     needs: checkout-build
     runs-on: self-hosted
     strategy:
@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Run Experiment ${{ matrix.case }}
         run: |
-          cd ${{ env.TEST_DIR }}/NWA12_CHECK/${{ matrix.case }}
+          cd ${{ env.TEST_DIR }}/NWA12_CHECK/exps/${{ matrix.case }}
           jobid=$(sbatch --parsable driver.sh | awk -F';' '{print $1}' | cut -f1) 
           #
           sleep 1
@@ -62,7 +62,7 @@ jobs:
           done
           # 
           expected_string="All restart files are identical, PASS"
-          check_file="${{ env.TEST_DIR }}/NWA12_CHECK/${{ matrix.case }}/NWA12_CFC_RT_o.$jobid"
+          check_file="${{ env.TEST_DIR }}/NWA12_CHECK/${{ matrix.case }}/NWA12.CFC_o.$jobid"
           if [ -f "$check_file" ]; then
              if grep -qF "$expected_string" $check_file; then
                  echo "PASSED: ${{ matrix.case }}"
@@ -74,3 +74,12 @@ jobs:
              echo "Can not find $check_file. STOP"
              exit 10
           fi
+
+  clean-up:
+    needs: run-NWA12-ci
+    runs-on: self-hosted
+    steps:
+      - name: Clean-up
+        run: |
+          cd ${{ github.workspace }}
+          rm -rf ${{ github.run_id }}          

@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=60
-#SBATCH --job-name="NWA12_CFC_RT"
-#SBATCH --output=NWA12_CFC_RT_o.%j
-#SBATCH --error=NWA12_CFC_RT_e.%j
+#SBATCH --time=30
+#SBATCH --job-name="NWA12.CFC"
+#SBATCH --output=NWA12.CFC_o.%j
+#SBATCH --error=NWA12.CFC_e.%j
 #SBATCH --qos=debug
 #SBATCH --partition=batch
 #SBATCH --clusters=c5
