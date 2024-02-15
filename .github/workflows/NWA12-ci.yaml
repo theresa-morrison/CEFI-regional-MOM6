@@ -1,0 +1,76 @@
+name: NWA12-ci
+
+on:
+  push:
+    branches: [ "bug/repro" ]
+  pull_request:
+    branches: [ "main" ]
+
+#
+env:
+  TEST_DIR: ${{ github.workspace }}/${{ github.run_id }}
+
+#
+jobs:
+  checkout-build:
+    runs-on: self-hosted
+    timeout-minutes: 600
+
+    steps:
+    - name: Checkout CEFI-regional-MOM6
+      uses: actions/checkout@v3
+      with:
+        path: ${{ github.run_id }}/NWA12_CHECK
+        submodules: recursive
+
+    - uses: jitterbit/get-changed-files@v1
+      id: abc
+      with:
+        format: space-delimited
+        token: ${{ secrets.GITHUB_TOKEN }}     
+
+    - name: Build MOM6SIS2
+      run: |
+        cd ${{ env.TEST_DIR }}/NWA12_CHECK/builds
+        ./linux-build.bash -m gaea -p ncrc5.intel23 -t repro -f mom6sis2
+
+
+  run-NWA12-restart-ci:
+    needs: checkout-build
+    runs-on: self-hosted
+    strategy:
+      max-parallel: 2
+      matrix:
+        case: ["NWA12.CFC"]
+    steps:
+      - name: Run Experiment ${{ matrix.case }}
+        run: |
+          cd ${{ env.TEST_DIR }}/NWA12_CHECK/${{ matrix.case }}
+          jobid=$(sbatch --parsable driver.sh | awk -F';' '{print $1}' | cut -f1) 
+          #
+          sleep 1
+          while :; do
+              job_status=$(squeue -h -j "$jobid" -o "%T" 2>/dev/null)
+              if [ -z "$job_status" ]; then
+                 echo "Job with ID $jobid is not found or completed."
+                 break
+              else
+                 echo "Job with ID $jobid is still running."
+                 echo "Job Status: $job_status"
+              fi
+              sleep 30  # Adjust the sleep duration as needed
+          done
+          # 
+          expected_string="All restart files are identical, PASS"
+          check_file="${{ env.TEST_DIR }}/NWA12_CHECK/${{ matrix.case }}/NWA12_CFC_RT_o.$jobid"
+          if [ -f "$check_file" ]; then
+             if grep -qF "$expected_string" $check_file; then
+                 echo "PASSED: ${{ matrix.case }}"
+             else
+                 echo "FAILED: ${{ matrix.case }}"
+                 exit 1
+             fi
+          else
+             echo "Can not find $check_file. STOP"
+             exit 10
+          fi
