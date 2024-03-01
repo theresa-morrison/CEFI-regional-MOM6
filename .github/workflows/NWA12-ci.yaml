@@ -2,7 +2,7 @@ name: NWA12-ci
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "bug/tracer_repro" ]
 
 #
 env:
