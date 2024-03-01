@@ -2,8 +2,6 @@ name: NWA12-ci
 
 on:
   push:
-    branches: [ "bug/repro" ]
-  pull_request:
     branches: [ "main" ]
 
 #
