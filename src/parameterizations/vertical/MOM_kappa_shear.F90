@@ -61,6 +61,9 @@ type, public :: Kappa_shear_CS ; private
                              !! to findind an energetically constrained solution for the
                              !! shear-driven diffusivity [H Z T-1 ~> m2 s-1 or Pa s]
   real    :: kappa_trunc     !< Diffusivities smaller than this are rounded to 0 [H Z T-1 ~> m2 s-1 or Pa s]
+  real    :: kappa_upper_lim !< Diffusivities larger than this are reduced [H Z T-1 ~> m2 s-1 or Pa s]
+  real    :: frac_kappa_upper_lim !< Fraction that kappa is decreased by when it is larger than the upper limit [H Z T-1 ~> m2 s-1 or Pa s]
+                             !< if this value is less than zero, kappa is set to kappa_upper_lim
   real    :: kappa_tol_err   !<   The fractional error in kappa that is tolerated [nondim].
   real    :: Prandtl_turb    !< Prandtl number used to convert Kd_shear into viscosity [nondim].
   integer :: nkml            !<   The number of layers in the mixed layer, as
@@ -939,8 +942,14 @@ subroutine kappa_shear_column(kappa, tke, dt, nzc, f2, surface_pres, hlay, dz_la
 ! ----------------------------------------------------
 
   ! call cpu_clock_begin(id_clock_KQ)
-    call find_kappa_tke(N2, S2, kappa, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
-                        nzc, CS, GV, US, K_Q, tke, kappa_out, kappa_src, local_src)
+  ! feels a bit like an inital guess? or a guess for each itteratoin?
+    if (CS%kappa_upper_lim>0) then
+      call find_kappa_tke(N2, S2, kappa, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                          nzc, CS, GV, US, K_Q, tke, kappa_out, kappa_src, local_src, kappa_limit=.true.)
+    else
+      call find_kappa_tke(N2, S2, kappa, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                          nzc, CS, GV, US, K_Q, tke, kappa_out, kappa_src, local_src)
+    endif 
   ! call cpu_clock_end(id_clock_KQ)
 
   ! call cpu_clock_begin(id_clock_avg)
@@ -1066,8 +1075,14 @@ subroutine kappa_shear_column(kappa, tke, dt, nzc, f2, surface_pres, hlay, dz_la
 
     ! call cpu_clock_begin(id_clock_KQ)
       do K=1,nzc+1 ; K_Q_tmp(K) = K_Q(K) ; enddo
-      call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
-                          nzc, CS, GV, US, K_Q_tmp, tke_pred, kappa_pred)
+    ! find kappa 
+      if (CS%kappa_upper_lim>0) then
+        call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                            nzc, CS, GV, US, K_Q_tmp, tke_pred, kappa_pred, kappa_limit=.true.)
+      else
+        call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                            nzc, CS, GV, US, K_Q_tmp, tke_pred, kappa_pred)
+      endif 
     ! call cpu_clock_end(id_clock_KQ)
 
       ks_kappa = GV%ke+1 ; ke_kappa = 0
@@ -1084,8 +1099,17 @@ subroutine kappa_shear_column(kappa, tke, dt, nzc, f2, surface_pres, hlay, dz_la
     ! call cpu_clock_end(id_clock_project)
 
     ! call cpu_clock_begin(id_clock_KQ)
-      call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
-                          nzc, CS, GV, US, K_Q, tke_pred, kappa_pred)
+
+    ! find kappa and tke for projected state
+    ! predictor
+      if (CS%kappa_upper_lim>0) then
+        call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                            nzc, CS, GV, US, K_Q, tke_pred, kappa_pred, kappa_limit=.true.)
+      else
+        call find_kappa_tke(N2, S2, kappa_out, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
+                            nzc, CS, GV, US, K_Q, tke_pred, kappa_pred)
+      endif 
+    ! call cpu_clock_end(id_clock_KQ)
     ! call cpu_clock_end(id_clock_KQ)
 
     ! call cpu_clock_begin(id_clock_avg)
@@ -1248,7 +1272,7 @@ end subroutine calculate_projected_state
 
 !> This subroutine calculates new, consistent estimates of TKE and kappa.
 subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_bdry, f2, &
-                          nz, CS, GV, US, K_Q, tke, kappa, kappa_src, local_src)
+                          nz, CS, GV, US, K_Q, tke, kappa, kappa_src, local_src, kappa_limit)
   integer,               intent(in)    :: nz  !< The number of layers to work on.
   real, dimension(nz+1), intent(in)    :: N2  !< The buoyancy frequency squared at interfaces [T-2 ~> s-2].
   real, dimension(nz+1), intent(in)    :: S2  !< The squared shear at interfaces [T-2 ~> s-2].
@@ -1278,6 +1302,8 @@ subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_b
                          intent(out)   :: kappa_src !< The source term for kappa [T-1 ~> s-1]
   real, dimension(nz+1), optional, &
                          intent(out)   :: local_src !< The sum of all local sources for kappa
+                                              !! [T-1 ~> s-1]
+  logical, optional, intent(in)        :: kappa_limit !< The sum of all local sources for kappa
                                               !! [T-1 ~> s-1]
   ! This subroutine calculates new, consistent estimates of TKE and kappa.
 
@@ -1354,6 +1380,8 @@ subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_b
   logical :: was_Newton   ! The value of do_Newton before checking convergence.
   logical :: within_tolerance ! If .true., all points are within tolerance to
                           ! enable this subroutine to return.
+  logical :: limit_kappa  ! 
+  real    :: kappa_upper_lim, frac_kappa_upper_lim
   integer :: ks_src, ke_src ! The range indices that have nonzero k_src.
   integer :: ks_kappa, ke_kappa, ke_tke   ! The ranges of k-indices that are or
   integer :: ks_kappa_prev, ke_kappa_prev ! were being worked on.
@@ -1377,6 +1405,12 @@ subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_b
   do_Newton = .false. ; abort_Newton = .false.
   tol_err = CS%kappa_tol_err
   Newton_err = 0.2     ! This initial value may be automatically reduced later.
+
+  limit_kappa = .false.; if (present(kappa_limit)) limit_kappa = .true.
+  if (limit_kappa) then
+    kappa_upper_lim = CS%kappa_upper_lim 
+    frac_kappa_upper_lim = CS%frac_kappa_upper_lim 
+  endif
 
   ks_kappa = 2 ; ke_kappa = nz ; ks_kappa_prev = 2 ; ke_kappa_prev = nz
 
@@ -1618,7 +1652,7 @@ subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_b
         ! Solve for dQ(K)...
         aQ(k) = (0.5*(kappa(K)+kappa(K+1))+kappa0) * Idz(k)
         dQdz(k) = 0.5*(TKE(K) - TKE(K+1))*Idz(k)
-        tke_src = h_Int(K) * (dz_h_Int(K)*((kappa(K) + kappa0)*S2(K) - kappa(k)*N2(K)) - &
+        tke_src = h_Int(K) * ((dz_h_Int(K) * ((kappa(K) + kappa0)*S2(K) - kappa(k)*N2(K))) - &
                                (TKE(k) - q0)*TKE_decay(k)) - &
                   (aQ(k) * (TKE(K) - TKE(K+1)) - aQ(k-1) * (TKE(K-1) - TKE(K)))
         v1 = aQ(k-1) + dQdz(k-1)*dKdQ(K-1)
@@ -1807,6 +1841,21 @@ subroutine find_kappa_tke(N2, S2, kappa_in, Idz, h_Int, dz_Int, dz_h_Int, I_L2_b
     enddo
   endif
 
+  if (limit_kappa) then
+    do K=2,nz
+      if (kappa(K)>kappa_upper_lim) then
+        call MOM_error(WARNING, "kappa_shear exceeds upper limit and  "// &
+                                "is being reduced.")
+        if (frac_kappa_upper_lim<0) then
+          kappa(K) = kappa_upper_lim
+        else
+          kappa(K) = kappa(K)*frac_kappa_upper_lim
+        endif 
+      endif 
+    enddo
+    ! should I recalculate TKE here?
+  endif
+
 end subroutine find_kappa_tke
 
 !> This subroutine initializes the parameters that regulate shear-driven mixing
@@ -1893,6 +1942,17 @@ function kappa_shear_init(Time, G, GV, US, param_file, diag, CS)
                  "and is rounded down to 0. The default is 1% of KD_KAPPA_SHEAR_0.", &
                  units="m2 s-1", default=0.01*CS%kappa_0*GV%HZ_T_to_m2_s, scale=GV%m2_s_to_HZ_T, &
                  do_not_log=just_read)
+  call get_param(param_file, mdl, "UPPER_LIMIT_KAPPA_SHEAR", CS%kappa_upper_lim, &
+                 "The value of shear-driven diffusivity that is considered too large "//&
+                 "and reduced either to a fixed value or by a certain amount. The "//&
+                 "reduced value depends on LIMIT_KAPPA_SHEAR_FRAC. When UPPER_LIMIT_KAPPA_SHEAR" //& 
+                 "is less than zero, not upper limit is used.", &
+                 units="m2 s-1", default=-1.0, scale=GV%m2_s_to_HZ_T)
+  call get_param(param_file, mdl, "LIMIT_KAPPA_SHEAR_FRAC", CS%frac_kappa_upper_lim, &
+                 "The fraction of shear-driven diffusivity that remains after applying the "//&
+                 "upper limit. When LIMIT_KAPPA_SHEAR_FRAC is less than zero, diffusicities larger " //&
+                 "than the upper limit are reset to the upper limit.", &
+                 units="m2 s-1", default=-1.0, scale=GV%m2_s_to_HZ_T)
   call get_param(param_file, mdl, "FRI_CURVATURE", CS%FRi_curvature, &
                  "The nondimensional curvature of the function of the "//&
                  "Richardson number in the kappa source term in the "//&
